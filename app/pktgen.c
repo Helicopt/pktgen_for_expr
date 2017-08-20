@@ -1190,6 +1190,50 @@ pktgen_main_transmit(port_info_t *info, uint16_t qid)
 		pktgen_tx_flush(info, qid);
 }
 
+inline void printMac(unsigned char * d) {
+	int i;
+	for (i=0;i<6;++i)
+		printf("\x1b[33m%02x \x1b[0m", d[i]);
+}
+
+inline void printIP(unsigned char * d) {
+	printf("\x1b[33m%3d.%3d.%3d.%3d \x1b[0m",*d,*(d+1),*(d+2),*(d+3));
+}
+
+#define black_list_cnt 2
+
+unsigned char black_list[black_list_cnt][4] = {{113,244,103,5}, {202,128,166,7}};
+
+inline int IPcmp(unsigned char * x, unsigned char * y) {
+	return !(*x==*y&&*(x+1)==*(y+1)&&*(x+2)==*(y+2)&&*(x+3)==*(y+3));
+}
+
+
+inline void Pkt_View(struct rte_mbuf ** bufs, int nb_rx) {
+	int t, i;
+	for (t=0;t<nb_rx;++t) {
+		unsigned char * d = (unsigned char *)bufs[t];
+		d = d + 256;
+		puts("\nPkt:\n");
+		printf("Dst MAC: ");
+		printMac(d);
+		printf("Src MAC: ");
+		printMac(d+6);
+		unsigned char * ipd = d+14;
+		printf("IPv%d len: %d ",*ipd>>4, (*(ipd+2)<<8)|(*(ipd+3)));
+		printf("src IP: ");
+		printIP(ipd+12);
+		printf("dst IP: ");
+		printIP(ipd+16);
+		printf("protocol: %d, serv.: %x", *(ipd + 9), *(ipd + 1));
+		printf("\n\x1b[0m");
+		for (i = 0; i < 34; ++i) printf("\x1b[33m%02x \x1b[0m",d[i]);
+		printf("\n\x1b[0m");
+	}
+
+}
+
+
 /**************************************************************************//**
  *
  * pktgen_main_receive - Main receive routine for packets of a port.
@@ -1221,7 +1265,11 @@ pktgen_main_receive(port_info_t *info,
 	if ( (nb_rx = rte_eth_rx_burst(pid, qid, pkts_burst, info->tx_burst)) == 0)
 		return;
 	unsigned int clo = clock();
-	printf("\nrecv %u Pkts, clock: %u %u where: %u\n\n", nb_rx, clo, clo-pre_stamp, pre_id);
+	unsigned char * d = (unsigned char *)pkts_burst[0]+256+14;
+	unsigned char k = *(d+1);
+	printf("\nrecv %u Pkts, clock: %u %u %u where: %u, dCode: %02x\n\n", nb_rx, clo, clo-pre_stamp, pre_stamp, pre_id, k);
+	//Pkt_View(pkts_burst,1);
+
 
 	info->q[qid].rx_cnt += nb_rx;
 
